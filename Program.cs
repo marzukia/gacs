@@ -14,35 +14,41 @@ namespace GeneticAlgorithim
             var srcGenome = new Genome("mario.jpg");
             int parentPoolSize = 5;
             int genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 2));
+            double mutationRate = 0.10;
 
-            List<Genome> currentGenomes = GenerateStartingGenomes(srcGenome, genomePoolSize);
+            List<Genome> currentGenomes = GenerateStartingGenomes(srcGenome, genomePoolSize, mutationRate);
 
             int n;
-            for ( n = 0; n < 1000; n++ )
+            for ( n = 0; n < 1000000; n++ )
             {
-                List<Genome> parentGenomes = SelectParents(currentGenomes, genomePoolSize);
+                List<Genome> parentGenomes = SelectParents(currentGenomes, parentPoolSize);
                 List<Genome> offspringGenomes = GenerateOffspringGenomes(parentGenomes);
-
-                if (offspringGenomes[0].loss < currentGenomes[0].loss)
-                {
-                    Console.WriteLine(n + " " + offspringGenomes[0].loss);
-                    currentGenomes = offspringGenomes;
-                }
 
                 if ( n % 100 == 0 )
                 {
-                    currentGenomes[0].SaveGenome("results/" + n + ".bmp");
+                    Console.WriteLine(
+                        "gen={0}, loss={1}, pool={2}, parents={3}",
+                        n, currentGenomes[0].loss, currentGenomes.Count,
+                        parentGenomes.Count
+                    );
+                    currentGenomes[0].SaveGenome("results/" + n + ".bmp"
+                    );
+                }
+
+                if (offspringGenomes[0].loss < currentGenomes[0].loss)
+                {
+                    currentGenomes = offspringGenomes;
                 }
             }
             currentGenomes[0].SaveGenome("results/final.bmp");
         }
 
-        static List<Genome> GenerateStartingGenomes(Genome srcGenome, int genomePoolSize)
+        static List<Genome> GenerateStartingGenomes(Genome srcGenome, int genomePoolSize, double mutationRate)
         {
             ConcurrentBag<Genome> startingGenomes = new ConcurrentBag<Genome>();
             Parallel.For(0, genomePoolSize, (index, state) =>
             {
-                var newGenome = new Genome(srcGenome.width, srcGenome.height, srcGenome, 0.01);
+                var newGenome = new Genome(srcGenome.width, srcGenome.height, srcGenome, mutationRate);
                 startingGenomes.Add(newGenome);
             });
             return startingGenomes.OrderBy(genome => genome.loss).ToList();
@@ -170,7 +176,7 @@ namespace GeneticAlgorithim
                     loss += pixel_loss;
                 }
             }
-            this.loss = loss;
+            this.loss = Math.Round(loss, 4);
         }
 
         public void MutateGenes()
@@ -187,7 +193,8 @@ namespace GeneticAlgorithim
                         int r = rand.Next(0, 256);
                         int g = rand.Next(0, 256);
                         int b = rand.Next(0, 256);
-                        this.genes[w, h] = Color.FromArgb(255, r, g, b);
+                        Color randomColor = Color.FromArgb(255, r, g, b);
+                        this.genes[w, h] = randomColor;
                     }
                 }
             }
