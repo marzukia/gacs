@@ -11,7 +11,7 @@ namespace GeneticAlgorithim
     {
         static void Main(string[] args)
         {
-            var population = new Population("mario.jpg", 5);
+            var population = new Population("mario.jpg", 10);
             population.OptimizePopulation(100000);
         }
     }
@@ -28,7 +28,7 @@ namespace GeneticAlgorithim
         {
             this.srcGenome = this.CreateSourceGenome(srcFilepath);
             this.parentPoolSize = parentPoolSize;
-            this.genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 3));
+            this.genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 4));
             this.InitializeSeedGenomes();
         }
 
@@ -64,7 +64,7 @@ namespace GeneticAlgorithim
         {
             var parentGenomes = this.SelectParents(this.currentGenomes);
             ConcurrentBag<Genome> offspring = new ConcurrentBag<Genome>();
-            Parallel.For(0, parentPoolSize, (index, state) =>
+            Parallel.For(0, parentPoolSize * parentPoolSize, (index, state) =>
             {
                 Parallel.ForEach(parentGenomes, (father) =>
                 {
