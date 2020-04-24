@@ -11,84 +11,109 @@ namespace GeneticAlgorithim
     {
         static void Main(string[] args)
         {
-            var srcGenome = new Genome("mario.jpg");
-            int parentPoolSize = 5;
-            int genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 2));
-            double mutationRate = 0.10;
+            var population = new Population("mario.jpg", 5);
+            population.OptimizePopulation(100000);
+        }
+    }
 
-            List<Genome> currentGenomes = GenerateStartingGenomes(srcGenome, genomePoolSize, mutationRate);
+    class Population
+    {
+        public Genome srcGenome;
+        public int parentPoolSize;
+        public int genomePoolSize;
+        public List<Genome> currentGenomes;
+        public List<Genome> offspringGenomes;
 
-            int n;
-            for ( n = 0; n < 1000000; n++ )
-            {
-                List<Genome> parentGenomes = SelectParents(currentGenomes, parentPoolSize);
-                List<Genome> offspringGenomes = GenerateOffspringGenomes(parentGenomes);
-
-                if ( n % 100 == 0 )
-                {
-                    Console.WriteLine(
-                        "gen={0}, loss={1}, pool={2}, parents={3}",
-                        n, currentGenomes[0].loss, currentGenomes.Count,
-                        parentGenomes.Count
-                    );
-                    currentGenomes[0].SaveGenome("results/" + n + ".bmp"
-                    );
-                }
-
-                if (offspringGenomes[0].loss < currentGenomes[0].loss)
-                {
-                    currentGenomes = offspringGenomes;
-                }
-            }
-            currentGenomes[0].SaveGenome("results/final.bmp");
+        public Population(string srcFilepath, int parentPoolSize = 16)
+        {
+            this.srcGenome = this.CreateSourceGenome(srcFilepath);
+            this.parentPoolSize = parentPoolSize;
+            this.genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 2));
+            this.InitializeSeedGenomes();
         }
 
-        static List<Genome> GenerateStartingGenomes(Genome srcGenome, int genomePoolSize, double mutationRate)
+        private Genome CreateSourceGenome(string srcFilepath)
         {
-            ConcurrentBag<Genome> startingGenomes = new ConcurrentBag<Genome>();
-            Parallel.For(0, genomePoolSize, (index, state) =>
+            var srcGenome = new Genome(srcFilepath);
+            return srcGenome;
+        }
+
+        private void InitializeSeedGenomes()
+        {
+            ConcurrentBag<Genome> seedGenomes = new ConcurrentBag<Genome>();
+            Parallel.For(0, this.genomePoolSize, (index, state) =>
             {
-                var newGenome = new Genome(srcGenome.width, srcGenome.height, srcGenome, mutationRate);
-                startingGenomes.Add(newGenome);
+                var seedGenome = new Genome(this.srcGenome, 0.01);
+                seedGenomes.Add(seedGenome);
             });
-            return startingGenomes.OrderBy(genome => genome.loss).ToList();
+            this.currentGenomes = seedGenomes.OrderBy(genome => genome.loss).ToList();
         }
 
-        static Genome MateGenomes(Genome fatherGenome, Genome motherGenome)
+        private List<Genome> SelectParents(List<Genome> targetGenomes)
         {
-            var offspring = fatherGenome.MateGenomes(motherGenome);
-            return offspring;
+            return targetGenomes.GetRange(0, this.parentPoolSize);
         }
 
-        static List<Genome> GenerateOffspringGenomes(List<Genome> parentGenomes)
+        private double CalculateGenomesLoss(List<Genome> targetGenomes)
         {
+            var loss = targetGenomes.GetRange(0, parentPoolSize).Average(genome => genome.loss);
+            return loss;
+        }
+
+        private void GenerateOffspringGeneration()
+        {
+            var parentGenomes = this.SelectParents(this.currentGenomes);
             ConcurrentBag<Genome> offspring = new ConcurrentBag<Genome>();
             Parallel.ForEach(parentGenomes, (father) =>
             {
                 Parallel.ForEach(parentGenomes, (mother) =>
                 {
-                    var child = MateGenomes(father, mother);
+                    var child = father.MateGenomes(mother);
                     offspring.Add(child);
                 });
             });
-            return offspring.OrderBy(child => child.loss).ToList();
+            this.offspringGenomes = offspring.OrderBy(child => child.loss).ToList();
         }
 
-        static List<Genome> SelectParents(List<Genome> parentGenomes, int parentPoolSize)
+        private void DecideGeneration()
         {
-            return parentGenomes.GetRange(0, parentPoolSize);
+            var currentLoss = this.CalculateGenomesLoss(this.currentGenomes);
+            var offspringLoss = this.CalculateGenomesLoss(this.offspringGenomes);
+
+            if (offspringLoss < currentLoss)
+            {
+                this.currentGenomes = this.offspringGenomes;
+            }
+        }
+
+        public void OptimizePopulation(int generations) {
+            int n;
+            for ( n = 0; n < generations; n++ )
+            {
+                if (n % 1000 == 0)
+                {
+                    var currentLoss = this.CalculateGenomesLoss(this.currentGenomes);
+                    Console.WriteLine("generation {0} | loss {1}", n, currentLoss);
+                    this.currentGenomes[0].SaveGenome("results/gen-" + n + ".bmp");
+                }
+
+                this.GenerateOffspringGeneration();
+                this.DecideGeneration();
+            }
+            var finalLoss = this.CalculateGenomesLoss(this.currentGenomes);
+            Console.WriteLine("generation {0} | loss {1}", n, finalLoss);
+            this.currentGenomes[0].SaveGenome("results/gen-result.bmp");
         }
     }
 
     class Genome
     {
-        public int width { get; set; }
-        public int height { get; set; }
-        public Genome srcGenome { get; set; }
-        public Genome parentGenome { get; set; }
-        public double mutation_rate { get; set; }
-        public Color [,] genes { get; set; }
-        public double loss { get; set; }
+        public int width;
+        public int height;
+        public Genome srcGenome;
+        public double mutation_rate;
+        public Color [,] genes;
+        public double loss;
         public List<Color> colors = new List<Color>()
         {
             Color.FromArgb(255, 255, 0, 0),
@@ -97,14 +122,12 @@ namespace GeneticAlgorithim
         };
 
         public Genome(
-            int height,
-            int width,
             Genome srcGenome,
-            double mutation_rate = 0.01
+            double mutation_rate
         )
         {
-            this.width = width;
-            this.height = height;
+            this.width = srcGenome.width;
+            this.height = srcGenome.height;
             this.srcGenome = srcGenome;
             this.mutation_rate = mutation_rate;
             this.genes = new Color [width, height];
@@ -113,19 +136,12 @@ namespace GeneticAlgorithim
 
         public Genome(string srcFilepath)
         {
-            this.mutation_rate = 0;
-            LoadSource(srcFilepath);
+            this.LoadSource(srcFilepath);
         }
 
-        public Genome(Genome parentGenome)
+        public void SetSourceGenome(Genome srcGenome)
         {
-            this.width = parentGenome.width;
-            this.height = parentGenome.height;
-            this.srcGenome = parentGenome.srcGenome;
-            this.parentGenome = parentGenome;
-            this.mutation_rate = parentGenome.mutation_rate;
-            this.genes = parentGenome.genes;
-            this.loss = parentGenome.loss;
+            this.srcGenome = srcGenome;
         }
 
         public void LoadSource(string srcFilepath)
@@ -179,32 +195,15 @@ namespace GeneticAlgorithim
             this.loss = Math.Round(loss, 4);
         }
 
-        public void MutateGenes()
+        public Genome Clone()
         {
-            int w; int h;
-            for ( w = 0; w < this.width; w++ )
-            {
-                for ( h = 0; h < this.height; h++ )
-                {
-                    Random rand = new Random();
-                    double p = rand.NextDouble();
-                    if (p <= this.mutation_rate)
-                    {
-                        int r = rand.Next(0, 256);
-                        int g = rand.Next(0, 256);
-                        int b = rand.Next(0, 256);
-                        Color randomColor = Color.FromArgb(255, r, g, b);
-                        this.genes[w, h] = randomColor;
-                    }
-                }
-            }
-            this.CalculateLoss();
+            return (Genome) this.MemberwiseClone();
         }
 
         public Genome MateGenomes(Genome partnerGenome)
         {
             Color [,] partnerGenes = partnerGenome.genes;
-            Genome offspring = new Genome(this);
+            Genome offspring = this.Clone();
             int w; int h;
             for ( w = 0; w < this.width; w++ )
             {
@@ -235,5 +234,29 @@ namespace GeneticAlgorithim
             }
             this.CalculateLoss();
         }
+
+        public void MutateGenes()
+        {
+            int w; int h;
+            for ( w = 0; w < this.width; w++ )
+            {
+                for ( h = 0; h < this.height; h++ )
+                {
+                    Random rand = new Random();
+                    double p = rand.NextDouble();
+                    if (p <= this.mutation_rate)
+                    {
+                        int a = 255;
+                        int r = rand.Next(0, 256);
+                        int g = rand.Next(0, 256);
+                        int b = rand.Next(0, 256);
+                        Color randomColor = Color.FromArgb(a, r, g, b);
+                        this.genes[w, h] = randomColor;
+                    }
+                }
+            }
+            this.CalculateLoss();
+        }
+
     }
 }
