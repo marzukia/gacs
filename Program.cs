@@ -28,7 +28,7 @@ namespace GeneticAlgorithim
         {
             this.srcGenome = this.CreateSourceGenome(srcFilepath);
             this.parentPoolSize = parentPoolSize;
-            this.genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 2));
+            this.genomePoolSize = Convert.ToInt32(Math.Pow(parentPoolSize, 3));
             this.InitializeSeedGenomes();
         }
 
@@ -64,12 +64,15 @@ namespace GeneticAlgorithim
         {
             var parentGenomes = this.SelectParents(this.currentGenomes);
             ConcurrentBag<Genome> offspring = new ConcurrentBag<Genome>();
-            Parallel.ForEach(parentGenomes, (father) =>
+            Parallel.For(0, parentPoolSize, (index, state) =>
             {
-                Parallel.ForEach(parentGenomes, (mother) =>
+                Parallel.ForEach(parentGenomes, (father) =>
                 {
-                    var child = father.MateGenomes(mother);
-                    offspring.Add(child);
+                    Parallel.ForEach(parentGenomes, (mother) =>
+                    {
+                        var child = father.MateGenomes(mother);
+                        offspring.Add(child);
+                    });
                 });
             });
             this.offspringGenomes = offspring.OrderBy(child => child.loss).ToList();
@@ -93,7 +96,10 @@ namespace GeneticAlgorithim
                 if (n % 1000 == 0)
                 {
                     var currentLoss = this.CalculateGenomesLoss(this.currentGenomes);
-                    Console.WriteLine("generation {0} | loss {1}", n, currentLoss);
+                    Console.WriteLine(
+                        "generation {0} | loss {1} | pop {2}",
+                        n, currentLoss, this.currentGenomes.Count
+                    );
                     this.currentGenomes[0].SaveGenome("results/gen-" + n + ".bmp");
                 }
 
