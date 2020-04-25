@@ -11,7 +11,7 @@ namespace GeneticAlgorithim
     {
         static void Main(string[] args)
         {
-            var population = new Population("mario.jpg", 10);
+            var population = new Population("mario.jpg", 3);
             population.OptimizePopulation(100000);
         }
     }
@@ -24,7 +24,7 @@ namespace GeneticAlgorithim
         public List<Genome> currentGenomes;
         public List<Genome> offspringGenomes;
 
-        public Population(string srcFilepath, int parentPoolSize = 16)
+        public Population(string srcFilepath, int parentPoolSize = 2)
         {
             this.srcGenome = this.CreateSourceGenome(srcFilepath);
             this.parentPoolSize = parentPoolSize;
@@ -203,7 +203,9 @@ namespace GeneticAlgorithim
 
         public Genome Clone()
         {
-            return (Genome) this.MemberwiseClone();
+            var shallow = (Genome) this.MemberwiseClone();
+            shallow.genes = (Color [,]) this.genes.Clone();
+            return shallow;
         }
 
         public Genome MateGenomes(Genome partnerGenome)
